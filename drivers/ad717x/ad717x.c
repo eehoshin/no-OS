@@ -285,6 +285,9 @@ int32_t AD717X_ReadData(ad717x_dev *device,
         if (!dataReg)
                 return INVALID_VAL;
 
+        /* Update the data register length with respect to device and options */
+        ret |= AD717X_ComputeDataregSize(device);
+
         /* Read the value of the Status Register */
         ret = AD717X_ReadRegister(device, AD717X_DATA_REG);
 
@@ -292,6 +295,58 @@ int32_t AD717X_ReadData(ad717x_dev *device,
         *pData = dataReg->value;
 
         return ret;
+}
+
+/***************************************************************************//**
+* @brief Computes data register read size to account for bit number and status
+* 		 read.
+*
+* @param device - The handler of the instance of the driver.
+*
+* @return 0in case of success or negative code in case of failure.
+*******************************************************************************/
+int32_t AD717X_ComputeDataregSize(ad717x_dev *device)
+{
+	int32_t ret = 0;
+	ad717x_st_reg *reg_ptr;
+	ad717x_st_reg *datareg_ptr;
+	uint16_t case_var;
+
+	/* Get interface mode register pointer */
+	reg_ptr = AD717X_GetReg(device, AD717X_IFMODE_REG);
+	/* Get data register pointer */
+	datareg_ptr = AD717X_GetReg(device, AD717X_DATA_REG);
+
+	case_var = reg_ptr->value & (AD717X_IFMODE_REG_DATA_STAT |
+			AD717X_IFMODE_REG_DATA_WL16);
+
+	/* Compute data register size */
+    switch(case_var) {
+    case 0:
+    	datareg_ptr->size = 3;
+    	break;
+    case AD717X_IFMODE_REG_DATA_WL16:
+    	datareg_ptr->size = 2;
+    	break;
+    case AD717X_IFMODE_REG_DATA_STAT:
+    	datareg_ptr->size = 4;
+    	break;
+    case (AD717X_IFMODE_REG_DATA_STAT | AD717X_IFMODE_REG_DATA_WL16):
+    	datareg_ptr->size = 3;
+    	break;
+    default:
+    	datareg_ptr->size = 3;
+    	break;
+    }
+
+	/* Get ID register pointer */
+    reg_ptr = AD717X_GetReg(device, AD717X_ID_REG);
+
+    /* If the part is 32/24 bit wide add a byte to the read */
+    if((reg_ptr->value & 0xfff0) == 0x4fd0)
+    	datareg_ptr->size++;
+
+	return ret;
 }
 
 /***************************************************************************//**
